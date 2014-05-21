@@ -9,7 +9,7 @@ import Control.Monad.IO.Class
 import Data.Monoid hiding (Last)
 import Data.Foldable (foldMap)
 import System.Process
-import System.IO hiding (FilePath)
+import System.Environment (getArgs)
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -22,7 +22,6 @@ import Data.Attoparsec.Text
 import Text.Pandoc
 import Text.Pandoc.Walk
 import Filesystem.Path.CurrentOS
-import Debug.Trace
 
 import Inkscape
 
@@ -42,7 +41,11 @@ filterPandoc filter =
     >>= return . writeJSON def
     >>= liftIO . putStr
 
-main = mainTalk
+main = do
+    args <- getArgs
+    case args of
+      "notes":_ -> mainNotes
+      _            -> mainTalk >>= errLn . show
 
 mainTalk :: IO (Either String ())
 mainTalk =
@@ -64,7 +67,7 @@ visLayersFor fname = visLayers . at fname . non M.empty
 
 onFailure :: MonadIO m => a -> EitherT String m a -> m a
 onFailure def action =
-    runEitherT action >>= either (\e->liftIO (hPutStr stderr e) >> return def) return
+    runEitherT action >>= either (\e->liftIO (errLn e) >> return def) return
 
 walkFilters :: MonadIO m => Inline -> StateT FilterState m Inline 
 walkFilters blk@(Image contents (fname,alt)) = onFailure blk $ do
@@ -83,7 +86,6 @@ walkFilters blk@(Image contents (fname,alt)) = onFailure blk $ do
     findFilterDef :: Monad m => Inline -> EitherT String (StateT FilterState m) (Either Inline SvgFilter)
     findFilterDef (Code _ s) = do
         filt <- hoistEither $ parseOnly parseFilter $ T.pack s
-        traceShow filt $ return ()
         case filt of
           Only layers -> do
             lift $ visLayersFor fname' .= foldMap (\l->M.singleton l 1) layers
@@ -103,7 +105,6 @@ walkFilters blk@(Image contents (fname,alt)) = onFailure blk $ do
                 visFilter, opacityFilter :: SvgFilter
                 visFilter = showOnlyLayers (M.keys $ vis')
                 opacityFilter doc = foldl (\doc' (name,op)->doc & layersLabelled name . layerOpacity .~ op) doc (M.assocs vis')
-            traceShow vis' $ return ()
             return $ Right $ opacityFilter . visFilter
           Scale s -> return $ Right $ scale s
     findFilterDef x = return $ Left x
