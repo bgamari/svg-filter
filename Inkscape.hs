@@ -35,6 +35,7 @@ import Filesystem.Path.CurrentOS (FilePath, decodeString, encodeString, toText)
 
 type SvgFilter = Document -> Document
 type LayerLabel = Text
+type ElementId = Text
 type Opacity = Float
 type Layer = Element
 
@@ -55,6 +56,10 @@ traverseLayers =
     root
     . entire . filtered (views name (== svg "g"))
     . attributeIs (inkscape "groupmode") "layer"
+
+ids :: ElementId -> Traversal' Document Element
+ids label = filtered match
+  where match el = el ^. elementId == Just label
 
 layersLabelled :: LayerLabel -> Traversal' Document Layer
 layersLabelled label = 
