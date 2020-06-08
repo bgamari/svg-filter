@@ -132,7 +132,7 @@ parseLayer = do
 
 parseFilter :: Parser FilterType
 parseFilter = do
-    string "filter:" 
+    string "svg-filter:"
     skipSpace
     only <|> last <|> scale <?> "filter specifier"
   where
