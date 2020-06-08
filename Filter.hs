@@ -36,6 +36,7 @@ makeLenses ''FilterState
 instance Default FilterState where
     def = FilterState {_figNum = 0, _visLayers = mempty}
 
+main :: IO ()
 main = do
     args <- getArgs
     case args of
