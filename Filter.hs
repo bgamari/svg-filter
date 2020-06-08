@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings, TemplateHaskell, RankNTypes #-}
-import Prelude hiding (FilePath)
 
 import Control.Applicative
 import Control.Monad
@@ -10,18 +9,22 @@ import Data.Monoid hiding (Last)
 import Data.Foldable (foldMap)
 import System.Process
 import System.Environment (getArgs)
+import System.FilePath
+import System.IO
+import Prelude
 
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 
 import Control.Error
 import Data.Default
 import Control.Lens hiding (Action)
 import Data.Attoparsec.Text
 import Text.Pandoc
+import Text.Pandoc.JSON
 import Text.Pandoc.Walk
-import Filesystem.Path.CurrentOS
 
 import Inkscape
 
@@ -33,59 +36,49 @@ makeLenses ''FilterState
 instance Default FilterState where
     def = FilterState {_figNum = 0, _visLayers = mempty}
 
-filterPandoc :: MonadIO m => (Pandoc -> m Pandoc) -> m ()
-filterPandoc filter =
-        liftIO getContents
-    >>= return . readJSON def
-    >>= filter
-    >>= return . writeJSON def
-    >>= liftIO . putStr
-
 main = do
     args <- getArgs
     case args of
       "notes":_ -> mainNotes
-      _            -> mainTalk >>= errLn . show
+      _         -> mainTalk
 
-mainTalk :: IO (Either String ())
+mainTalk :: IO ()
 mainTalk =
-    runEitherT $ flip evalStateT def $ filterPandoc $
+    toJSONFilter $ \doc -> onFailure doc $ evalStateT (filt doc) def
+  where
+    filt :: Pandoc -> StateT FilterState (ExceptT String IO) Pandoc
+    filt =
       walkM walkFilters
       >=> walkM (lift . svgToPdf)
       >=> return . walk filterNotes
 
 mainNotes :: IO ()
-mainNotes = filterPandoc $ return . filterForNotes
-
-mapFileName :: (T.Text -> T.Text) -> FilePath -> FilePath
-mapFileName f fpath = (directory fpath <> fname') `addExtensions` extensions fpath
-  where fname' = fromText $ f $ either (error "invalid file name") id $ toText
-               $ dropExtensions $ filename fpath
+mainNotes = toJSONFilter filterForNotes
 
 visLayersFor :: FilePath -> Lens' FilterState (M.Map LayerLabel Opacity)
 visLayersFor fname = visLayers . at fname . non M.empty
 
-onFailure :: MonadIO m => a -> EitherT String m a -> m a
+onFailure :: MonadIO m => a -> ExceptT String m a -> m a
 onFailure def action =
-    runEitherT action >>= either (\e->liftIO (errLn e) >> return def) return
+    runExceptT action >>= either (\e->liftIO (hPutStrLn stderr e) >> return def) return
 
 walkFilters :: MonadIO m => Inline -> StateT FilterState m Inline 
-walkFilters blk@(Image contents (fname,alt)) = onFailure blk $ do
+walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
     (contents', filters) <- partitionEithers `fmap` mapM findFilterDef contents
     figNum += 1
     case filters of
-      [] -> return $ Image contents (fname, alt)
+      [] -> return $ Image attrs contents (fname, alt)
       _  -> do
         n <- use figNum
         let f = foldl (.) id filters
-        let fnameNew = mapFileName (<>T.pack ("-"++show n)) fname'
+        let fnameNew = replaceBaseName fname' (takeBaseName fname' <> suffix)
+              where suffix = "-" <> show n
         runFilter fname' fnameNew f
-        return $ Image contents' (encodeString fnameNew, alt)
+        return $ Image attrs contents' (T.pack fnameNew, alt)
   where
-    fname' = decodeString fname
-    findFilterDef :: Monad m => Inline -> EitherT String (StateT FilterState m) (Either Inline SvgFilter)
+    findFilterDef :: Monad m => Inline -> ExceptT String (StateT FilterState m) (Either Inline SvgFilter)
     findFilterDef (Code _ s) = do
-        filt <- hoistEither $ parseOnly parseFilter $ T.pack s
+        filt <- hoistEither $ parseOnly parseFilter s
         case filt of
           Only layers -> do
             lift $ visLayersFor fname' .= foldMap (\l->M.singleton l 1) layers
@@ -108,6 +101,7 @@ walkFilters blk@(Image contents (fname,alt)) = onFailure blk $ do
             return $ Right $ opacityFilter . visFilter
           Scale s -> return $ Right $ scale s
     findFilterDef x = return $ Left x
+    fname' = T.unpack fname
 walkFilters inline = return inline
 
 data FilterType = Only (S.Set LayerLabel)
@@ -148,12 +142,12 @@ parseFilter = do
     scale = do string "scale" >> skipSpace
                Scale <$> rational
     
-svgToPdf :: Inline -> EitherT String IO Inline 
-svgToPdf (Image contents (fname,alt)) | fname' `hasExtension` "svg" = do
+svgToPdf :: Inline -> ExceptT String IO Inline 
+svgToPdf (Image attrs contents (fname,alt)) | "svg" `isExtensionOf` fname' = do
     let fnameNew = replaceExtension fname' "pdf"
-    liftIO $ callProcess "inkscape" [fname, "--export-pdf", encodeString fnameNew]
-    return $ Image contents (encodeString fnameNew, alt)
-  where fname' = decodeString fname
+    liftIO $ callProcess "inkscape" [fname', "--export-pdf", fnameNew]
+    return $ Image attrs contents (T.pack fnameNew, alt)
+  where fname' = T.unpack fname
 svgToPdf inline = return inline
             
 filterNotes :: Block -> Block

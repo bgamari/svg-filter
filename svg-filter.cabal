@@ -8,6 +8,7 @@ cabal-version:       >=1.10
 
 executable svg-filter
   main-is:             Filter.hs
+  other-modules:       Inkscape
   other-extensions:    OverloadedStrings, RankNTypes
   build-depends:       base >=4.7 && <4.16,
                        containers >=0.5 && <0.7,
@@ -16,10 +17,10 @@ executable svg-filter
                        xml-lens >=0.1 && <0.3,
                        errors >=1.4 && <2.4,
                        data-default >=0.5 && <0.8,
-                       system-filepath >=0.4 && <0.5,
                        mtl >=2.1 && <2.3,
                        transformers >=0.3 && <0.6,
                        pandoc-types >=1.12 && <1.21,
+                       filepath,
                        pandoc,
                        lens,
                        process,

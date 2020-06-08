@@ -12,7 +12,7 @@ module Inkscape
     , runFilter
     ) where
 
-import Prelude hiding (FilePath)
+import Prelude
 
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
@@ -25,13 +25,10 @@ import qualified Text.XML as Xml
 import           Data.Text (Text)
 import Text.XML.Lens
 import Control.Error
-import Data.Default
+import Control.Lens
 import Data.Default
 import Numeric.Lens       
 import Data.Text.Lens
-
-import qualified Filesystem.Path as Path
-import Filesystem.Path.CurrentOS (FilePath, decodeString, encodeString, toText)
 
 type SvgFilter = Document -> Document
 type LayerLabel = Text
@@ -56,10 +53,6 @@ traverseLayers =
     root
     . entire . filtered (views name (== svg "g"))
     . attributeIs (inkscape "groupmode") "layer"
-
-ids :: ElementId -> Traversal' Document Element
-ids label = filtered match
-  where match el = el ^. elementId == Just label
 
 layersLabelled :: LayerLabel -> Traversal' Document Layer
 layersLabelled label = 
@@ -120,7 +113,7 @@ scale s doc = root . nodes %~ scaleNodes
       [NodeElement $ Element "{http://www.w3.org/2000/svg}g" scaleAttr nodes]
     scaleAttr = M.singleton "transform" (T.pack $ "scale("++show s++")")
 
-runFilter :: MonadIO m => FilePath -> FilePath -> SvgFilter -> EitherT String m ()
+runFilter :: MonadIO m => FilePath -> FilePath -> SvgFilter -> ExceptT String m ()
 runFilter inFile outFile transform = do
     doc <- liftIO $ Xml.readFile def inFile
     --let notFound = filter (\l->l `notElem` allLayers doc) showLayers
