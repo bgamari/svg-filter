@@ -61,7 +61,7 @@ visLayersFor fname = visLayers . at fname . non M.empty
 
 onFailure :: MonadIO m => a -> ExceptT String m a -> m a
 onFailure def action =
-    runExceptT action >>= either (\e->liftIO (hPutStrLn stderr e) >> return def) return
+    runExceptT action >>= either (\e -> liftIO (hPutStrLn stderr $ "error: " ++ e) >> return def) return
 
 walkFilters :: MonadIO m => Inline -> StateT FilterState m Inline 
 walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
@@ -134,7 +134,7 @@ parseFilter :: Parser FilterType
 parseFilter = do
     string "filter:" 
     skipSpace
-    only <|> last <|> scale
+    only <|> last <|> scale <?> "filter specifier"
   where
     only = do string "only" >> skipSpace
               Only . S.fromList <$> layerName `sepBy` skipSpace
