@@ -1,6 +1,5 @@
 name:                svg-filter
 version:             0.1.0.0
-license-file:        LICENSE
 author:              Ben Gamari
 maintainer:          bgamari.foss@gmail.com
 build-type:          Simple
@@ -19,9 +18,8 @@ executable svg-filter
                        data-default >=0.5 && <0.8,
                        mtl >=2.1 && <2.3,
                        transformers >=0.3 && <0.6,
-                       pandoc-types >=1.12 && <1.21,
+                       pandoc-types >=1.20 && <1.21,
                        filepath,
-                       pandoc,
                        lens,
                        process,
                        attoparsec

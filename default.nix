@@ -5,7 +5,7 @@ let
   inherit (nixpkgs) pkgs;
 
   f = { mkDerivation, attoparsec, base, containers, data-default
-      , errors, lens, mtl, pandoc, pandoc-types, process, stdenv
+      , errors, lens, mtl, pandoc-types, process, stdenv
       , system-filepath, text, transformers, xml-conduit, xml-lens
       }:
       mkDerivation {
@@ -15,7 +15,7 @@ let
         isLibrary = false;
         isExecutable = true;
         executableHaskellDepends = [
-          attoparsec base containers data-default errors lens mtl pandoc
+          attoparsec base containers data-default errors lens mtl
           pandoc-types process system-filepath text transformers xml-conduit
           xml-lens
         ];
@@ -29,7 +29,9 @@ let
 
   variant = if doBenchmark then pkgs.haskell.lib.doBenchmark else pkgs.lib.id;
 
-  drv = variant (haskellPackages.callPackage f {});
+  drv = variant (haskellPackages.callPackage f {
+    pandoc-types = haskellPackages.callHackage "pandoc-types" "1.20" {};
+  });
 
 in
 

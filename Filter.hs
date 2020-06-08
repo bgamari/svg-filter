@@ -22,7 +22,7 @@ import Control.Error
 import Data.Default
 import Control.Lens hiding (Action)
 import Data.Attoparsec.Text
-import Text.Pandoc
+import Text.Pandoc.Definition
 import Text.Pandoc.JSON
 import Text.Pandoc.Walk
 
