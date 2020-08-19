@@ -117,7 +117,7 @@ data Action = Add      -- add to visible layers
             deriving (Show, Eq, Ord)
 
 layerName :: Parser LayerLabel
-layerName = takeWhile1 $ inClass "-a-zA-Z0-9"
+layerName = takeWhile1 $ inClass "-'a-zA-Z0-9"
 
 parseLayer :: Parser (Action, LayerLabel, Opacity)
 parseLayer = do
