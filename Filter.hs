@@ -146,7 +146,7 @@ parseFilter = do
 svgToPdf :: Inline -> ExceptT String IO Inline 
 svgToPdf (Image attrs contents (fname,alt)) | "svg" `isExtensionOf` fname' = do
     let fnameNew = replaceExtension fname' "pdf"
-    liftIO $ callProcess "inkscape" [fname', "--export-pdf", fnameNew]
+    liftIO $ callProcess "rsvg-convert" ["-f", "pdf", "-o", fnameNew, fname']
     return $ Image attrs contents (T.pack fnameNew, alt)
   where fname' = T.unpack fname
 svgToPdf inline = return inline
