@@ -25,7 +25,7 @@ import qualified Text.XML as Xml
 import           Data.Text (Text)
 import Text.XML.Lens
 import Control.Error
-import Control.Lens
+import Control.Lens as Lens
 import Data.Default
 import Numeric.Lens       
 import Data.Text.Lens
@@ -50,9 +50,7 @@ allLayers doc = catMaybes $ doc ^.. traverseLayers . layerLabel
 
 traverseLayers :: Traversal' Document Layer
 traverseLayers =
-    root
-    . entire . filtered (views name (== svg "g"))
-    . attributeIs (inkscape "groupmode") "layer"
+    root . Lens.deep (filtered (views name (== svg "g")) . attributeIs (inkscape "groupmode") "layer")
 
 layersLabelled :: LayerLabel -> Traversal' Document Layer
 layersLabelled label = 
