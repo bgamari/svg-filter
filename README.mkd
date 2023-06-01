@@ -16,3 +16,10 @@ One can also set the opacity of an element; the following will lighten `layer3` 
 ```markdown
 ![`svg-filter:last layer3=0.5`](figure.svg)
 ```
+
+## Usage
+
+Simply add the `svg-filter` filter to your `pandoc` invocation:
+```sh
+pandoc --to=beamer --filter=svg-filter talk.mkd
+```
