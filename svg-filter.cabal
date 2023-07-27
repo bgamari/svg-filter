@@ -1,25 +1,28 @@
 name:                svg-filter
-version:             0.1.0.0
+version:             1.0.0.0
+license-file:        LICENSE
 author:              Ben Gamari
 maintainer:          bgamari.foss@gmail.com
 build-type:          Simple
 cabal-version:       >=1.10
 
 executable svg-filter
-  main-is:             Filter.hs
-  other-modules:       Inkscape
+  main-is:             Main.hs
+  other-modules:       Inkscape, Filter, StringMatch
   other-extensions:    OverloadedStrings, RankNTypes
   build-depends:       base >=4.7 && <4.18,
                        containers >=0.5 && <0.7,
+                       bytestring,
                        text >=1.1 && <2.1,
                        xml-conduit >=1.2 && <1.10,
                        xml-lens >=0.3 && <0.4,
-                       errors >=1.4 && <2.4,
+                       errors >=2.0 && <2.4,
                        data-default >=0.5 && <0.8,
-                       mtl >=2.1 && <2.4,
-                       transformers >=0.3 && <0.7,
-                       pandoc-types >=1.20 && <1.23,
+                       mtl >=2.1 && <2.3,
                        filepath,
+                       transformers >=0.3 && <0.6,
+                       pandoc-types >=1.12 && <1.24,
+                       pandoc >=2.0 && <3.0,
                        lens,
                        process,
                        attoparsec

@@ -1,15 +1,21 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes #-}
 
 module Inkscape
-    ( SvgFilter
+    ( Svg
+    , SvgFilter
     , LayerLabel
     , Opacity
-    , layersLabelled
-    , layerOpacity
+    , Element
+    , labelAttr
+    , readSvg
+    , writeSvg
+    , byId
+    , layerLabel
+    , byLabel
+    , opacity
     , hideLayers
     , showOnlyLayers
     , scale
-    , runFilter
     ) where
 
 import Prelude
@@ -17,51 +23,58 @@ import Prelude
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import qualified Data.Map as M
-import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import Control.Monad.IO.Class
 
 import qualified Data.Text as T
 import qualified Text.XML as Xml
 import           Data.Text (Text)
 import Text.XML.Lens
+import Control.Lens
 import Control.Error
-import Control.Lens as Lens
 import Data.Default
-import Numeric.Lens       
 import Data.Text.Lens
 
+type Svg = Document
 type SvgFilter = Document -> Document
 type LayerLabel = Text
 type ElementId = Text
 type Opacity = Float
 type Layer = Element
 
-inkscape :: Name -> Name
-inkscape = _nameNamespace ?~ "http://www.inkscape.org/namespaces/inkscape"
+inInkscapeNs :: Name -> Name
+inInkscapeNs = _nameNamespace ?~ "http://www.inkscape.org/namespaces/inkscape"
 
 svg :: Name -> Name
 svg = _nameNamespace ?~ "http://www.w3.org/2000/svg"
 
+labelAttr :: Name
+labelAttr = inInkscapeNs "label"
+
 layerLabel :: Lens' Layer (Maybe LayerLabel)
-layerLabel = attrs . at (inkscape "label")
+layerLabel = attrs . at labelAttr
 
 allLayers :: Document -> [LayerLabel]
 allLayers doc = catMaybes $ doc ^.. traverseLayers . layerLabel
 
 traverseLayers :: Traversal' Document Layer
 traverseLayers =
-    root . Lens.deep (filtered (views name (== svg "g")) . attributeIs (inkscape "groupmode") "layer")
+    root
+    . deep (filtered (views name (== svg "g")))
+    . attributeIs (inInkscapeNs "groupmode") "layer"
 
-layersLabelled :: LayerLabel -> Traversal' Document Layer
-layersLabelled label = 
-    traverseLayers . filtered match
-  where match el = el ^. layerLabel == Just label
+byId :: ElementId -> Traversal' Document Element
+byId i = root . deep (attributeIs "id" i)
+
+byLabel :: LayerLabel -> Traversal' Document Element
+byLabel label =
+    root . deep (attributeIs labelAttr label)
 
 showAllGroups :: Document -> Document
 showAllGroups = traverseLayers . attrs . at "style" .~ Nothing
 
 hideLayers :: [LayerLabel] -> SvgFilter
-hideLayers layers doc =             
+hideLayers layers doc =
     let match el = (el ^. layerLabel) `elem` map Just layers
     in showAllGroups doc
        & traverseLayers
@@ -69,15 +82,15 @@ hideLayers layers doc =
        . style "display" ?~ "none"
 
 showOnlyLayers :: [LayerLabel] -> SvgFilter
-showOnlyLayers showLayers doc =             
+showOnlyLayers showLayers doc =
     let match el = (el ^. layerLabel) `notElem` map Just showLayers
     in showAllGroups doc
        & traverseLayers
        . filtered match
        . style "display" ?~ "none"
 
-layerOpacity :: Lens' Layer Opacity
-layerOpacity = style "opacity" . iso to from
+opacity :: Lens' Element Opacity
+opacity = style "opacity" . iso to from
   where
     to Nothing  = 1
     to (Just x) = maybe 1 id $ readMay $ T.unpack x
@@ -95,9 +108,9 @@ style' = iso to from
     splitKeyValue x = case T.splitOn ":" x of
                         [k,v]     -> M.singleton k v
                         otherwise -> M.empty
-    to = M.unions . map splitKeyValue . T.splitOn ";" 
+    to = M.unions . map splitKeyValue . T.splitOn ";"
     from = T.intercalate ";" . map (\(k,v)->k<>":"<>v) . M.toList
-        
+
 scale :: Double -> Document -> Document
 scale s doc = root . nodes %~ scaleNodes
             $ root . attr "width" . float %~ (/2)
@@ -111,9 +124,8 @@ scale s doc = root . nodes %~ scaleNodes
       [NodeElement $ Element "{http://www.w3.org/2000/svg}g" scaleAttr nodes]
     scaleAttr = M.singleton "transform" (T.pack $ "scale("++show s++")")
 
-runFilter :: MonadIO m => FilePath -> FilePath -> SvgFilter -> ExceptT String m ()
-runFilter inFile outFile transform = do
-    doc <- liftIO $ Xml.readFile def inFile
-    --let notFound = filter (\l->l `notElem` allLayers doc) showLayers
-    --when (not $ null notFound) $ lift $ putStrLn $ "couldn't find layers: "++show notFound
-    liftIO $ Xml.writeFile def outFile (transform doc)
+readSvg :: MonadIO m => FilePath -> ExceptT String m Svg
+readSvg inFile = liftIO $ Xml.readFile def inFile
+
+writeSvg :: MonadIO m => FilePath -> Svg -> ExceptT String m ()
+writeSvg outFile = liftIO . Xml.writeFile def outFile

@@ -1,14 +1,13 @@
 {-# LANGUAGE OverloadedStrings, TemplateHaskell, RankNTypes #-}
 
+module Filter where
+
 import Control.Applicative
 import Control.Monad
-import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import Control.Monad.State
-import Control.Monad.IO.Class
 import Data.Monoid hiding (Last)
 import Data.Foldable (foldMap)
-import System.Process
-import System.Environment (getArgs)
 import System.FilePath
 import System.IO
 import Prelude
@@ -20,50 +19,58 @@ import qualified Data.Text.IO as T
 
 import Control.Error
 import Data.Default
-import Control.Lens hiding (Action)
+import Control.Lens hiding (Action, (<.>))
 import Data.Attoparsec.Text
 import Text.Pandoc.Definition
 import Text.Pandoc.JSON
 import Text.Pandoc.Walk
+import qualified Text.XML.Lens as XML
 
 import Inkscape
+import StringMatch
+
+data Item = MatchLabel StringMatch Item
+          | MatchId StringMatch Item
+          | This
+          deriving (Eq, Ord, Show)
+
+data Action = Reset
+            | ShowLast
+            | Show Item     -- add to visible items
+            | Hide Item     -- remove from visible items
+            | SetOpacity Float Item  -- set opacity
+            | HideOnce Item -- hide for just this frame
+            | ShowOnce Item -- show for just this frame
+            | SetOpacityOnce Float Item -- set opacity for just this frame
+            deriving (Show, Eq, Ord)
+
+type ItemVisibilities = M.Map Item Opacity
+
+type ImageInfo = M.Map Item Opacity
 
 data FilterState = FilterState { _figNum :: Int
-                               , _visLayers :: M.Map FilePath (M.Map LayerLabel Opacity)
+                               , _visLayers :: M.Map FilePath ImageInfo
                                }
-makeLenses ''FilterState
 
 instance Default FilterState where
     def = FilterState {_figNum = 0, _visLayers = mempty}
 
-main :: IO ()
-main = do
-    args <- getArgs
-    case args of
-      "notes":_ -> mainNotes
-      _         -> mainTalk
+makeLenses ''FilterState
 
-mainTalk :: IO ()
-mainTalk =
-    toJSONFilter $ \doc -> onFailure doc $ evalStateT (filt doc) def
-  where
-    filt :: Pandoc -> StateT FilterState (ExceptT String IO) Pandoc
-    filt =
-      walkM walkFilters
-      >=> walkM (lift . svgToPdf)
-      >=> return . walk filterNotes
+type M m = ExceptT String (StateT FilterState m)
 
-mainNotes :: IO ()
-mainNotes = toJSONFilter filterForNotes
-
-visLayersFor :: FilePath -> Lens' FilterState (M.Map LayerLabel Opacity)
-visLayersFor fname = visLayers . at fname . non M.empty
+visItemsFor :: FilePath -> Lens' FilterState ItemVisibilities
+visItemsFor fname = visLayers . at fname . non M.empty
 
 onFailure :: MonadIO m => a -> ExceptT String m a -> m a
 onFailure def action =
-    runExceptT action >>= either (\e -> liftIO (hPutStrLn stderr $ "error: " ++ e) >> return def) return
+    runExceptT action >>= either (\e->liftIO (errLn $ T.pack e) >> return def) return
 
-walkFilters :: MonadIO m => Inline -> StateT FilterState m Inline 
+mapFileName :: (String -> String) -> FilePath -> FilePath
+mapFileName f fpath = (takeDirectory fpath <> fname') <.> takeExtensions fpath
+  where fname' = f $ dropExtensions $ takeFileName fpath
+
+walkFilters :: MonadIO m => Inline -> StateT FilterState m Inline
 walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
     (contents', filters) <- partitionEithers `fmap` mapM findFilterDef contents
     figNum += 1
@@ -71,89 +78,128 @@ walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
       [] -> return $ Image attrs contents (fname, alt)
       _  -> do
         n <- use figNum
-        let f = foldl (.) id filters
-        let fnameNew = replaceBaseName fname' (takeBaseName fname' <> suffix)
-              where suffix = "-" <> show n
-        runFilter fname' fnameNew f
+        let f = foldl (>=>) pure $ map runAction $ concat filters
+        let fnameNew = mapFileName (<> ("-"<>show n)) fname'
+        liftIO $ hPutStrLn stderr $ show filters
+        svg <- readSvg fname'
+        liftIO $ hPutStrLn stderr $ show $ toListOf (XML.root . deep (XML.attr "id")) svg
+        s <- use (visItemsFor fname')
+        svg' <- zoom (visItemsFor fname') (f svg)
+        writeSvg fnameNew svg'
         return $ Image attrs contents' (T.pack fnameNew, alt)
   where
-    findFilterDef :: Monad m => Inline -> ExceptT String (StateT FilterState m) (Either Inline SvgFilter)
-    findFilterDef (Code _ s) = do
-        filt <- hoistEither $ parseOnly parseFilter s
-        case filt of
-          Only layers -> do
-            lift $ visLayersFor fname' .= foldMap (\l->M.singleton l 1) layers
-            return $ Right $ showOnlyLayers $ S.toList layers
-          Last layers -> do
-            let filterAction :: Action -> M.Map LayerLabel Opacity
-                filterAction action =
-                    let go (action', name, opacity)
-                          | action == action'  = M.singleton name opacity
-                          | otherwise          = mempty
-                    in foldMap go layers
-            lift $ visLayersFor fname' %= \xs->xs `M.union` filterAction Add
-                                                  `M.difference` filterAction Remove
-            vis <- use $ visLayersFor fname'
-            let vis' = vis `M.difference` filterAction HideOnce
-                           `M.union` filterAction ShowOnce
-                visFilter, opacityFilter :: SvgFilter
-                visFilter = showOnlyLayers (M.keys $ vis')
-                opacityFilter doc = foldl (\doc' (name,op)->doc & layersLabelled name . layerOpacity .~ op) doc (M.assocs vis')
-            return $ Right $ opacityFilter . visFilter
-          Scale s -> return $ Right $ scale s
-    findFilterDef x = return $ Left x
     fname' = T.unpack fname
+    findFilterDef :: Monad m => Inline -> M m (Either Inline [Action])
+    findFilterDef (Code _ s) = fmap Right $ hoistEither $ parseOnly parseFilter s
+    findFilterDef x = return $ Left x
 walkFilters inline = return inline
 
-data FilterType = Only (S.Set LayerLabel)
-                | Last [(Action, LayerLabel, Opacity)]
-                | Scale Double
-                deriving (Show)
-                
-data Action = Add      -- add to visible layers
-            | Remove   -- remove from visible layers
-            | HideOnce -- hide for just this frame
-            | ShowOnce -- show for just this frame
-            deriving (Show, Eq, Ord)
+runAction :: Monad m => Action -> Svg -> ExceptT String (StateT ImageInfo m) Svg
+runAction Reset svg = put mempty >> return svg
+runAction ShowLast svg = do
+    s <- get
+    let f = appEndo $ foldMap (\(a,b) -> Endo $ setItemOpacity a b) (M.toList s)
+    return $ f svg
+runAction (Show item) svg = do
+    at item .= Just 1
+    checkItem item svg
+    return $ setItemOpacity item 1 svg
+runAction (Hide item) svg = do
+    at item .= Just 0
+    checkItem item svg
+    return $ setItemOpacity item 0 svg
+runAction (SetOpacity o item) svg = do
+    at item .= Just o
+    checkItem item svg
+    return $ setItemOpacity item o svg
+runAction (ShowOnce item) svg = do
+    checkItem item svg
+    return $ set (selectItem item . opacity) 1 svg
+runAction (HideOnce item) svg = do
+    checkItem item svg
+    return $ set (selectItem item . opacity) 0 svg
+runAction (SetOpacityOnce o item) svg = do
+    checkItem item svg
+    return $ set (selectItem item . opacity) o svg
 
-layerName :: Parser LayerLabel
-layerName = takeWhile1 $ inClass "-'a-zA-Z0-9"
+checkItem :: Monad m => Item -> Svg -> ExceptT String m ()
+checkItem item svg = do
+    when (lengthOf (selectItem item) svg == 0)
+        $ throwE $ "item selector "<>show item<>" matches no elements"
 
-parseLayer :: Parser (Action, LayerLabel, Opacity)
-parseLayer = do
-    action <- choice [ char '+' >> return Add
-                     , char '-' >> return Remove
-                     , char '!' >> return HideOnce
-                     ,             return ShowOnce
-                     ]
-    name <- layerName
-    opacity <- option 1 $ char '=' >> rational
-    return (action, name, opacity)
+selectItem :: Item -> Traversal' Svg Element
+selectItem item = XML.root . deep (go item)
+  where
+    go (MatchId r rest) = XML.attributeSatisfies "id" (attrMatches r) . go rest
+    go (MatchLabel r rest) = XML.attributeSatisfies labelAttr (attrMatches r) . go rest
+    go This = id
 
-parseFilter :: Parser FilterType
+    attrMatches :: StringMatch -> T.Text -> Bool
+    attrMatches re = matches re . T.unpack
+
+setItemOpacity :: Item -> Opacity -> Svg -> Svg
+setItemOpacity item = set (selectItem item . opacity)
+
+---------------------------------------------------------
+-- Action parser
+---------------------------------------------------------
+
+parseItem :: Parser Item
+parseItem = anId <|> aLabel <|> pure This
+  where
+    anId = do
+        char '#'
+        re <- regex
+        rest <- continued
+        return $ MatchId re rest
+    aLabel = do
+        re <- regex
+        rest <- continued
+        return $ MatchLabel re rest
+
+    continued = fromMaybe This <$> optional nested
+      where
+        nested = char '/' *> parseItem
+
+    regex :: Parser StringMatch
+    regex = foldr ($) EndMatch <$> some (choice [oneWildcard, wildcard, litChar])
+    oneWildcard = Wildcard <$ char '?'
+    wildcard = WildcardStar <$ char '*'
+    litChar = LitChar <$> satisfy (inClass "-a-zA-Z0-9")
+
+parseAction :: Parser Action
+parseAction =
+    choice [ string "!reset" >> return Reset
+           , string "!last" >> return ShowLast
+           , do char '+'
+                x <- parseItem
+                mOpacity <- optional $ do
+                    char '='
+                    realToFrac <$> double
+                case mOpacity of
+                  Just o  -> return $ SetOpacity o x
+                  Nothing -> return (Show x)
+           , char '-' >> fmap Hide parseItem
+           , string "!hide-once:" >> fmap HideOnce parseItem
+           , do x <- parseItem
+                guard (x /= This)
+                mOpacity <- optional $ do
+                    char '='
+                    realToFrac <$> double
+                case mOpacity of
+                  Just o  -> return $ SetOpacityOnce o x
+                  Nothing -> return (ShowOnce x)
+           ]
+
+parseFilter :: Parser [Action]
 parseFilter = do
     string "svg-filter:"
     skipSpace
-    only <|> last <|> scale <?> "filter specifier"
-  where
-    only = do string "only" >> skipSpace
-              Only . S.fromList <$> layerName `sepBy` skipSpace
-    last = do string "last" >> skipSpace
-              Last <$> parseLayer `sepBy` skipSpace
-    scale = do string "scale" >> skipSpace
-               Scale <$> rational
-    
-svgToPdf :: Inline -> ExceptT String IO Inline 
-svgToPdf (Image attrs contents (fname,alt)) | "svg" `isExtensionOf` fname' = do
-    let fnameNew = replaceExtension fname' "pdf"
-    liftIO $ callProcess "rsvg-convert" ["-f", "pdf", "-o", fnameNew, fname']
-    return $ Image attrs contents (T.pack fnameNew, alt)
-  where fname' = T.unpack fname
-svgToPdf inline = return inline
-            
+    many $ parseAction <* skipSpace
+
 filterNotes :: Block -> Block
 filterNotes (OrderedList (0,_,_) _) = Null
-filterNotes blk = blk            
+filterNotes blk = blk
 
 filterForNotes :: Pandoc -> Pandoc
 filterForNotes (Pandoc m body) = Pandoc m (filter f body)
