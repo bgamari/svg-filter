@@ -59,6 +59,9 @@ makeLenses ''FilterState
 
 type M m = ExceptT String (StateT FilterState m)
 
+outDir :: FilePath
+outDir = ".svg-filter"
+
 visItemsFor :: FilePath -> Lens' FilterState ItemVisibilities
 visItemsFor fname = visLayers . at fname . non M.empty
 
@@ -79,7 +82,8 @@ walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
       _  -> do
         n <- use figNum
         let f = foldl (>=>) pure $ map runAction $ concat filters
-        let fnameNew = mapFileName (<> ("-"<>show n)) fname'
+        let fnameNew = outDir </> mapFileName (<> ("-"<>show n)) fname'
+        liftIO $ createDirectoryIfMissing False outDir
         liftIO $ hPutStrLn stderr $ show filters
         svg <- readSvg fname'
         liftIO $ hPutStrLn stderr $ show $ toListOf (XML.root . deep (XML.attr "id")) svg
