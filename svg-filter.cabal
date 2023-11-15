@@ -10,19 +10,19 @@ executable svg-filter
   main-is:             Main.hs
   other-modules:       Inkscape, Filter, StringMatch
   other-extensions:    OverloadedStrings, RankNTypes
-  build-depends:       base >=4.7 && <4.18,
-                       containers >=0.5 && <0.7,
+  build-depends:       base >=4.7 && <4.20,
+                       containers >=0.5 && <0.8,
                        bytestring,
-                       text >=1.1 && <2.1,
+                       text >=1.1 && <2.2,
                        xml-conduit >=1.2 && <1.10,
                        xml-lens >=0.3 && <0.4,
                        errors >=2.0 && <2.4,
                        data-default >=0.5 && <0.8,
-                       mtl >=2.1 && <2.3,
+                       mtl >=2.1 && <2.4,
                        filepath,
-                       transformers >=0.3 && <0.6,
+                       transformers >=0.3 && <0.7,
                        pandoc-types >=1.12 && <1.24,
-                       pandoc >=2.0 && <3.0,
+                       pandoc >=2.0 && <3.2,
                        lens,
                        process,
                        attoparsec
