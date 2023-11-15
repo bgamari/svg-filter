@@ -44,7 +44,7 @@ mainTalk =
     flip evalStateT def $ filterPandoc $
       walkM walkFilters
       >=> walkM (lift . svgToPdf)
-      >=> return . walk filterNotes
+      >=> return . walk (foldMap filterNotes)
 
 mainNotes :: PandocIO ()
 mainNotes = filterPandoc $ return . filterForNotes

@@ -197,9 +197,9 @@ parseFilter = do
     skipSpace
     many $ parseAction <* skipSpace
 
-filterNotes :: Block -> Block
-filterNotes (OrderedList (0,_,_) _) = Null
-filterNotes blk = blk
+filterNotes :: Block -> [Block]
+filterNotes (OrderedList (0,_,_) _) = []
+filterNotes blk = [blk]
 
 filterForNotes :: Pandoc -> Pandoc
 filterForNotes (Pandoc m body) = Pandoc m (filter f body)
