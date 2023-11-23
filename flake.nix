@@ -12,6 +12,7 @@
       devShells.default = pkgs.mkShell {
         inputsFrom = [ packages.default ];
         packages = with pkgs; [ cabal-install zlib haskell-language-server ];
+        LD_LIBRARY_PATH = "${pkgs.zlib}/lib";
       };
     });
 }
