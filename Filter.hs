@@ -1,6 +1,10 @@
 {-# LANGUAGE OverloadedStrings, TemplateHaskell, RankNTypes #-}
 
-module Filter where
+module Filter
+    ( walkFilters
+    , filterNotes
+    , filterForNotes
+    ) where
 
 import Control.Applicative
 import Control.Monad
