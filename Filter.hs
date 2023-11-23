@@ -93,13 +93,13 @@ walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
       [] -> return $ Image attrs contents (fname, alt)
       _  -> do
         n <- use figNum
-        let f = foldl (>=>) pure $ map runAction $ concat filters
         let fnameNew = outDir </> mapFileName (<> ("-"<>show n)) fname'
         liftIO $ createDirectoryIfMissing False outDir
         liftIO $ hPutStrLn stderr $ show filters
         svg <- readSvg fname'
         liftIO $ hPutStrLn stderr $ show $ toListOf (XML.root . deep (XML.attr "id")) svg
         s <- use (visItemsFor fname')
+        let f = foldl (>=>) pure $ map runAction $ concat filters
         svg' <- zoom (visItemsFor fname') (f svg)
         writeSvg fnameNew svg'
         return $ Image attrs contents' (T.pack fnameNew, alt)
@@ -108,6 +108,7 @@ walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
     findFilterDef :: Monad m => Inline -> M m (Either Inline [Action])
     findFilterDef (Code _ s) = fmap Right $ hoistEither $ parseOnly parseFilter s
     findFilterDef x = return $ Left x
+
 walkFilters inline = return inline
 
 runAction :: Monad m => Action -> Svg -> ExceptT String (StateT ImageInfo m) Svg
