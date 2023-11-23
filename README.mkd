@@ -2,11 +2,34 @@
 
 This is a small hack that I use for discrete SVG transitions in `pandoc`/Beamer presentations. In particular, `svg-filter` is a `pandoc` filter which looks for image nodes with specially-formatted alt-text and modifies the SVG according to a simple filter description given in a small DSL.
 
+## Grammar
+
+```bnf
+<filter> = <action> +
+
+action = '!reset'          -- reset filter state
+       | '!show-all'       -- show all layers
+       | '!hide-all'       -- hide all layers
+       | '!last'           -- show all layers shown in last figure
+       | '+' item          -- show matching layers
+       | '-' item          -- hide matching layers
+       | '!hide-once' item -- hide matching layers without affecting filter state
+       | item              -- show matching layers without affecting filter state
+
+item   = '#' regex         -- match on `id` field
+       | regex             -- match on `inkscape:label` field
+
+regex  = '?'               -- single character wildcard
+       | '*'               -- wildcard
+       | character         -- match character
+```
+
+
 ## Example
 
 Filter expressions are denoted by an inline code block beginning with the text `svg-filter:`. The following will show `figure.svg`, hiding all elements but those named `layer1` and `layer2`:
 ```markdown
-![`svg-filter:only layer1 layer2`](figure.svg)
+![`svg-filter:!only layer1 layer2`](figure.svg)
 ```
 Filters are stateful; one can refer to and alter the last configuration of a particular image using the `last` filter. The following will show `figure.svg`, but this time hiding `layer1` and showing `layer3`:
 ```markdown

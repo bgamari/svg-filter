@@ -14,6 +14,8 @@ module Inkscape
     , byLabel
     , opacity
     , hideLayers
+    , showAllLayers
+    , hideAllLayers
     , showOnlyLayers
     , scale
     ) where
@@ -70,13 +72,16 @@ byLabel :: LayerLabel -> Traversal' Document Element
 byLabel label =
     root . deep (attributeIs labelAttr label)
 
-showAllGroups :: Document -> Document
-showAllGroups = traverseLayers . attrs . at "style" .~ Nothing
+showAllLayers :: Document -> Document
+showAllLayers = traverseLayers . style "display" .~ Just "inline"
+
+hideAllLayers :: Document -> Document
+hideAllLayers = traverseLayers . style "display" .~ Just "none"
 
 hideLayers :: [LayerLabel] -> SvgFilter
 hideLayers layers doc =
     let match el = (el ^. layerLabel) `elem` map Just layers
-    in showAllGroups doc
+    in doc
        & traverseLayers
        . filtered match
        . style "display" ?~ "none"
@@ -84,7 +89,7 @@ hideLayers layers doc =
 showOnlyLayers :: [LayerLabel] -> SvgFilter
 showOnlyLayers showLayers doc =
     let match el = (el ^. layerLabel) `notElem` map Just showLayers
-    in showAllGroups doc
+    in doc
        & traverseLayers
        . filtered match
        . style "display" ?~ "none"
@@ -100,10 +105,13 @@ opacity = style "opacity" . iso to from
 type StyleAttr = Text
 
 style :: StyleAttr -> Lens' Element (Maybe Text)
-style s = attribute "style" . non T.empty . style' . at s
+style s = style' . at s
 
-style' :: Iso' Text (M.Map StyleAttr Text)
-style' = iso to from
+style' :: Lens' Element (M.Map StyleAttr Text)
+style' = attribute "style" . non T.empty . styleString
+
+styleString :: Iso' Text (M.Map StyleAttr Text)
+styleString = iso to from
   where
     splitKeyValue x = case T.splitOn ":" x of
                         [k,v]     -> M.singleton k v

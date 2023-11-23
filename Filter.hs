@@ -43,6 +43,9 @@ data Item = MatchLabel StringMatch Item
           | This
           deriving (Eq, Ord, Show)
 
+matchAll :: Item
+matchAll = MatchId (WildcardStar EndMatch) This
+
 data Action = Reset
             | ShowLast
             | Show Item     -- add to visible items
@@ -183,6 +186,8 @@ parseItem = anId <|> aLabel <|> pure This
 parseAction :: Parser Action
 parseAction =
     choice [ string "!reset" >> return Reset
+           , string "!show-all" >> return (Show matchAll)
+           , string "!hide-all" >> return (Hide matchAll)
            , string "!last" >> return ShowLast
            , do char '+'
                 x <- parseItem
