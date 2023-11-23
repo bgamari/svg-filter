@@ -12,6 +12,7 @@ executable svg-filter
   other-extensions:    OverloadedStrings, RankNTypes
   build-depends:       base >=4.7 && <4.20,
                        containers >=0.5 && <0.8,
+                       directory,
                        bytestring,
                        text >=1.1 && <2.2,
                        xml-conduit >=1.2 && <1.10,

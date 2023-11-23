@@ -8,6 +8,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.State
 import Data.Monoid hiding (Last)
 import Data.Foldable (foldMap)
+import System.Directory
 import System.FilePath
 import System.IO
 import Prelude
