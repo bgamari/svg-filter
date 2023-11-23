@@ -152,8 +152,10 @@ checkItem item svg = do
 selectItem :: Item -> Traversal' Svg Element
 selectItem item = XML.root . deep (go item)
   where
-    go (MatchId r rest) = XML.attributeSatisfies "id" (attrMatches r) . go rest
-    go (MatchLabel r rest) = XML.attributeSatisfies labelAttr (attrMatches r) . go rest
+    go (MatchId r rest) =
+        isLayer . XML.attributeSatisfies "id" (attrMatches r) . go rest
+    go (MatchLabel r rest) =
+        isLayer . XML.attributeSatisfies labelAttr (attrMatches r) . go rest
     go This = id
 
     attrMatches :: StringMatch -> T.Text -> Bool

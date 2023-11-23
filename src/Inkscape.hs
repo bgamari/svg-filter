@@ -10,14 +10,11 @@ module Inkscape
     , readSvg
     , writeSvg
     , byId
+    , isLayer
     , layerLabel
     , byLabel
     , setOpacity
     , opacity
-    , hideLayers
-    , showAllLayers
-    , hideAllLayers
-    , showOnlyLayers
     , scale
     ) where
 
@@ -64,7 +61,10 @@ traverseLayers :: Traversal' Document Layer
 traverseLayers =
     root
     . deep (filtered (views name (== svg "g")))
-    . attributeIs (inInkscapeNs "groupmode") "layer"
+    . isLayer
+
+isLayer :: Traversal' Element Layer
+isLayer = attributeIs (inInkscapeNs "groupmode") "layer"
 
 byId :: ElementId -> Traversal' Document Element
 byId i = root . deep (attributeIs "id" i)
@@ -73,31 +73,13 @@ byLabel :: LayerLabel -> Traversal' Document Element
 byLabel label =
     root . deep (attributeIs labelAttr label)
 
-showAllLayers :: Document -> Document
-showAllLayers = traverseLayers . style "display" .~ Just "inline"
-
-hideAllLayers :: Document -> Document
-hideAllLayers = traverseLayers . style "display" .~ Just "none"
-
-hideLayers :: [LayerLabel] -> SvgFilter
-hideLayers layers doc =
-    let match el = (el ^. layerLabel) `elem` map Just layers
-    in doc
-       & traverseLayers
-       . filtered match
-       . style "display" ?~ "none"
-
-showOnlyLayers :: [LayerLabel] -> SvgFilter
-showOnlyLayers showLayers doc =
-    let match el = (el ^. layerLabel) `notElem` map Just showLayers
-    in doc
-       & traverseLayers
-       . filtered match
-       . style "display" ?~ "none"
+setVisible :: Bool -> Traversal' a Element -> a -> a
+setVisible vis xs = xs . style "display" ?~ val
+  where val = if vis then "inline" else "none"
 
 setOpacity :: Opacity -> Traversal' a Element -> a -> a
-setOpacity 0 xs = xs . style "display" ?~ "none"
-setOpacity o xs = (xs . style "display" ?~ "inline")
+setOpacity 0 xs = setVisible False xs
+setOpacity o xs = setVisible True xs
                 . (xs . opacity .~ o)
 
 opacity :: Lens' Element Opacity
