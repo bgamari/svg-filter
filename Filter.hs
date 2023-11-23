@@ -4,6 +4,10 @@ module Filter
     ( walkFilters
     , filterNotes
     , filterForNotes
+      -- * Testing
+    , parseFilter
+    , parseItem
+    , selectItem
     ) where
 
 import Control.Applicative

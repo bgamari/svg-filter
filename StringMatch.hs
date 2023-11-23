@@ -1,5 +1,6 @@
 module StringMatch
     ( StringMatch(..)
+    , renderStringMatch
     , litString
     , matches
     ) where
@@ -11,12 +12,15 @@ data StringMatch = LitChar Char StringMatch
                  deriving (Eq, Ord)
 
 instance Show StringMatch where
-    showsPrec _ x = showChar '"' . go x . showChar '"'
-      where
-        go (LitChar c rest) = showChar c . go rest
-        go (Wildcard rest) = showChar '?' . go rest
-        go (WildcardStar rest) = showChar '*' . go rest
-        go EndMatch = id
+    showsPrec _ = renderStringMatch
+
+renderStringMatch :: StringMatch -> ShowS
+renderStringMatch x = showChar '"' . go x . showChar '"'
+  where
+    go (LitChar c rest) = showChar c . go rest
+    go (Wildcard rest) = showChar '?' . go rest
+    go (WildcardStar rest) = showChar '*' . go rest
+    go EndMatch = id
 
 instance Monoid StringMatch where
     mempty = EndMatch
