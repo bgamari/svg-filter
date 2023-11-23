@@ -114,7 +114,7 @@ walkFilters inline = return inline
 runActions :: Monad m => [Action] -> Svg -> ExceptT String (StateT ImageInfo m) Svg
 runActions actions svg =
     let f = foldl (>=>) pure $ map runAction actions
-    in f $ showAllLayers svg
+    in f svg
 
 runAction :: Monad m => Action -> Svg -> ExceptT String (StateT ImageInfo m) Svg
 runAction Reset svg = put mempty >> return svg
@@ -136,13 +136,13 @@ runAction (SetOpacity o item) svg = do
     return $ setItemOpacity item o svg
 runAction (ShowOnce item) svg = do
     checkItem item svg
-    return $ set (selectItem item . opacity) 1 svg
+    return $ setItemOpacity item 1 svg
 runAction (HideOnce item) svg = do
     checkItem item svg
-    return $ set (selectItem item . opacity) 0 svg
+    return $ setItemOpacity item 0 svg
 runAction (SetOpacityOnce o item) svg = do
     checkItem item svg
-    return $ set (selectItem item . opacity) o svg
+    return $ setItemOpacity item o svg
 
 checkItem :: Monad m => Item -> Svg -> ExceptT String m ()
 checkItem item svg = do
@@ -160,7 +160,8 @@ selectItem item = XML.root . deep (go item)
     attrMatches re = matches re . T.unpack
 
 setItemOpacity :: Item -> Opacity -> Svg -> Svg
-setItemOpacity item = set (selectItem item . opacity)
+setItemOpacity item o = do
+    setOpacity o (selectItem item)
 
 ---------------------------------------------------------
 -- Action parser

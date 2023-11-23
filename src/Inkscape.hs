@@ -12,6 +12,7 @@ module Inkscape
     , byId
     , layerLabel
     , byLabel
+    , setOpacity
     , opacity
     , hideLayers
     , showAllLayers
@@ -94,6 +95,11 @@ showOnlyLayers showLayers doc =
        . filtered match
        . style "display" ?~ "none"
 
+setOpacity :: Opacity -> Traversal' a Element -> a -> a
+setOpacity 0 xs = xs . style "display" ?~ "none"
+setOpacity o xs = (xs . style "display" ?~ "inline")
+                . (xs . opacity .~ o)
+
 opacity :: Lens' Element Opacity
 opacity = style "opacity" . iso to from
   where
@@ -114,8 +120,8 @@ styleString :: Iso' Text (M.Map StyleAttr Text)
 styleString = iso to from
   where
     splitKeyValue x = case T.splitOn ":" x of
-                        [k,v]     -> M.singleton k v
-                        otherwise -> M.empty
+                        [k,v] -> M.singleton k v
+                        _     -> M.empty
     to = M.unions . map splitKeyValue . T.splitOn ";"
     from = T.intercalate ";" . map (\(k,v)->k<>":"<>v) . M.toList
 
