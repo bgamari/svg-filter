@@ -5,7 +5,8 @@ module Filter
     , filterNotes
     , filterForNotes
       -- * Testing
-    , parseFilter
+    , runActions
+    , parseFilters
     , parseItem
     , selectItem
     ) where
@@ -87,20 +88,19 @@ mapFileName f fpath = (takeDirectory fpath <> fname') <.> takeExtensions fpath
 
 walkFilters :: MonadIO m => Inline -> StateT FilterState m Inline
 walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
-    (contents', filters) <- partitionEithers `fmap` mapM findFilterDef contents
+    (contents', actions) <- partitionEithers `fmap` mapM findFilterDef contents
     figNum += 1
-    case filters of
+    case actions of
       [] -> return $ Image attrs contents (fname, alt)
       _  -> do
         n <- use figNum
         let fnameNew = outDir </> mapFileName (<> ("-"<>show n)) fname'
         liftIO $ createDirectoryIfMissing False outDir
-        liftIO $ hPutStrLn stderr $ show filters
+        liftIO $ hPutStrLn stderr $ show actions
         svg <- readSvg fname'
         liftIO $ hPutStrLn stderr $ show $ toListOf (XML.root . deep (XML.attr "id")) svg
         s <- use (visItemsFor fname')
-        let f = foldl (>=>) pure $ map runAction $ concat filters
-        svg' <- zoom (visItemsFor fname') (f svg)
+        svg' <- zoom (visItemsFor fname') (runActions (concat actions) svg)
         writeSvg fnameNew svg'
         return $ Image attrs contents' (T.pack fnameNew, alt)
   where
@@ -110,6 +110,11 @@ walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
     findFilterDef x = return $ Left x
 
 walkFilters inline = return inline
+
+runActions :: Monad m => [Action] -> Svg -> ExceptT String (StateT ImageInfo m) Svg
+runActions actions svg =
+    let f = foldl (>=>) pure $ map runAction actions
+    in f $ showAllLayers svg
 
 runAction :: Monad m => Action -> Svg -> ExceptT String (StateT ImageInfo m) Svg
 runAction Reset svg = put mempty >> return svg
@@ -214,7 +219,13 @@ parseFilter :: Parser [Action]
 parseFilter = do
     string "svg-filter:"
     skipSpace
-    many $ parseAction <* skipSpace
+    parseFilters'
+
+parseFilters' :: Parser [Action]
+parseFilters' = many $ parseAction <* skipSpace
+
+parseFilters :: T.Text -> Either String [Action]
+parseFilters = parseOnly parseFilters'
 
 filterNotes :: Block -> [Block]
 filterNotes (OrderedList (0,_,_) _) = []

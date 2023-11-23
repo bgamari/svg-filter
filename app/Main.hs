@@ -22,6 +22,7 @@ import Text.Pandoc
 import Text.Pandoc.Walk
 
 import Filter
+import Inkscape
 
 filterPandoc :: (MonadIO m, PandocMonad m)
              => (Pandoc -> m Pandoc) -> m ()
@@ -36,8 +37,9 @@ main :: IO ()
 main = do
     args <- getArgs
     runIOorExplode $ case args of
-      "notes":_ -> mainNotes
-      _         -> mainTalk
+      "run":svg:filt:[] -> liftIO $ runFilters svg filt
+      "notes":_         -> mainNotes
+      _                 -> mainTalk
 
 mainTalk :: PandocIO ()
 mainTalk =
@@ -57,3 +59,10 @@ svgToPdf (Image attrs contents (fname,alt)) | "svg" `isExtensionOf` fname' = do
   where
     fname' = T.unpack fname
 svgToPdf inline = return inline
+
+runFilters :: FilePath -> String -> IO ()
+runFilters svgPath filt = exceptT fail return $ do
+    svg <- readSvg svgPath
+    actions <- hoistEither $ parseFilters (T.pack filt)
+    svg' <- ExceptT $ flip evalStateT mempty $ runExceptT $ runActions actions svg
+    writeSvg "out.svg" svg'
