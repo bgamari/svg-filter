@@ -9,20 +9,20 @@ cabal-version:       >=1.10
 library
   exposed-modules:     Inkscape, StringMatch, Filter
   other-extensions:    OverloadedStrings, RankNTypes
-  build-depends:       base >=4.7 && <4.20,
-                       containers >=0.5 && <0.8,
+  build-depends:       base >=4.7 && <4.22,
+                       containers >=0.5 && <0.9,
                        directory,
                        bytestring,
                        text >=1.1 && <2.2,
-                       xml-conduit >=1.2 && <1.10,
+                       xml-conduit >=1.2 && <1.11,
                        xml-lens >=0.3 && <0.4,
                        errors >=2.0 && <2.4,
-                       data-default >=0.5 && <0.8,
+                       data-default >=0.5 && <0.9,
                        mtl >=2.1 && <2.4,
                        filepath,
                        transformers >=0.3 && <0.7,
                        pandoc-types >=1.12 && <1.24,
-                       pandoc >=2.0 && <3.2,
+                       pandoc >=2.0 && <3.8,
                        lens,
                        process,
                        attoparsec
