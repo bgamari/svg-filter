@@ -16,10 +16,12 @@ action = '!reset'          -- reset filter state
        | '!hide-once' item -- hide matching layers without affecting filter state
        | item              -- show matching layers without affecting filter state
 
-item   = '#' regex         -- match on `id` field
-       | regex             -- match on `inkscape:label` field
+-- An SVG element descriptor
+item   = '#' glob          -- match on `id` field
+       | glob              -- match on `inkscape:label` field
 
-regex  = '?'               -- single character wildcard
+-- A globbing pattern
+glob   = '?'               -- single character wildcard
        | '*'               -- wildcard
        | character         -- match character
 ```
