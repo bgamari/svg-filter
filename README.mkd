@@ -31,13 +31,13 @@ Filter expressions are denoted by an inline code block beginning with the text `
 ```markdown
 ![`svg-filter:!only layer1 layer2`](figure.svg)
 ```
-Filters are stateful; one can refer to and alter the last configuration of a particular image using the `last` filter. The following will show `figure.svg`, but this time hiding `layer1` and showing `layer3`:
+Filters are stateful; with the `!last` directive one can reuse the last filter of a particular image (identified by the filename). The following will show `figure.svg`, but this time hiding `layer1` and showing `layer3`:
 ```markdown
-![`svg-filter:last -layer1 +layer3`](figure.svg)
+![`svg-filter:!last -layer1 +layer3`](figure.svg)
 ```
 One can also set the opacity of an element; the following will lighten `layer3` to 50% opacity:
 ```markdown
-![`svg-filter:last layer3=0.5`](figure.svg)
+![`svg-filter:!last layer3=0.5`](figure.svg)
 ```
 
 ## Usage
