@@ -2,6 +2,7 @@
 
 module Filter
     ( walkFilters
+    , stripFilterCaptions
     , filterNotes
     , filterForNotes
       -- * Testing
@@ -110,6 +111,26 @@ walkFilters blk@(Image attrs contents (fname,alt)) = onFailure blk $ do
     findFilterDef x = return $ Left x
 
 walkFilters inline = return inline
+
+-- | Since pandoc 3.0 a lone image in a paragraph is hoisted into a 'Figure'
+-- block whose caption is a *copy* of the image's caption inlines. Our
+-- 'walkFilters' pass only rewrites the 'Image' inline, so the @svg-filter:@
+-- 'Code' left behind in the figure caption would otherwise be rendered. This
+-- pass strips such filter directives from figure captions.
+stripFilterCaptions :: Block -> Block
+stripFilterCaptions (Figure attr (Caption short longs) content) =
+    Figure attr (Caption short longs') content
+  where
+    longs' = filter (not . emptyBlock) (walk (filter (not . isFilterCode)) longs)
+    emptyBlock (Plain []) = True
+    emptyBlock (Para  []) = True
+    emptyBlock _          = False
+stripFilterCaptions blk = blk
+
+-- | Does this inline hold an @svg-filter:@ directive?
+isFilterCode :: Inline -> Bool
+isFilterCode (Code _ s) = either (const False) (const True) (parseOnly parseFilter s)
+isFilterCode _          = False
 
 runActions :: Monad m => [Action] -> Svg -> ExceptT String (StateT ImageInfo m) Svg
 runActions actions svg =
