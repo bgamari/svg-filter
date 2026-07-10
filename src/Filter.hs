@@ -115,17 +115,21 @@ walkFilters inline = return inline
 -- | Since pandoc 3.0 a lone image in a paragraph is hoisted into a 'Figure'
 -- block whose caption is a *copy* of the image's caption inlines. Our
 -- 'walkFilters' pass only rewrites the 'Image' inline, so the @svg-filter:@
--- 'Code' left behind in the figure caption would otherwise be rendered. This
--- pass strips such filter directives from figure captions.
-stripFilterCaptions :: Block -> Block
-stripFilterCaptions (Figure attr (Caption short longs) content) =
-    Figure attr (Caption short longs') content
+-- 'Code' left behind in the figure caption would otherwise be rendered as the
+-- figure caption. This pass strips such filter directives from figure
+-- captions; when that leaves the caption empty the figure wrapper is removed
+-- entirely so the image renders like any other un-captioned image (avoiding a
+-- stray, numbered @\\caption{}@).
+stripFilterCaptions :: Block -> [Block]
+stripFilterCaptions (Figure attr (Caption short longs) content)
+    | null longs' = content
+    | otherwise   = [Figure attr (Caption short longs') content]
   where
     longs' = filter (not . emptyBlock) (walk (filter (not . isFilterCode)) longs)
     emptyBlock (Plain []) = True
     emptyBlock (Para  []) = True
     emptyBlock _          = False
-stripFilterCaptions blk = blk
+stripFilterCaptions blk = [blk]
 
 -- | Does this inline hold an @svg-filter:@ directive?
 isFilterCode :: Inline -> Bool
